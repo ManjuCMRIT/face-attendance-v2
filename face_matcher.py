@@ -28,23 +28,32 @@ def get_embeddings(img_np):
     return result
 
 
-# Compare embeddings with registered students
 def match_faces(emb, registered, threshold=0.55):
-    emb = np.array(emb, dtype=float)   # convert uploaded embedding to numpy
+    emb = np.array(emb, dtype=float)  # convert uploaded embedding to numpy
     
     best_match = None
-    best_score = 99  # smaller = better
+    best_score = 999  # large initial value
 
     for usn, reg_emb in registered.items():
-        reg_emb = np.array(reg_emb, dtype=float)   # convert stored embedding to numpy
+
+        # Skip if embedding doesn't exist or is empty
+        if reg_emb is None or len(reg_emb) == 0:
+            continue
+
+        try:
+            reg_emb = np.array(reg_emb, dtype=float)
+        except:
+            continue  # ignore invalid records
+
         dist = np.linalg.norm(reg_emb - emb)
 
-        # find minimum distance match
+        # accept only best & below threshold
         if dist < best_score and dist < threshold:
             best_score = dist
             best_match = usn
 
     return best_match, best_score
+
 
 
 # ----------------------------------------
