@@ -5,6 +5,9 @@ import cv2
 from firebase_utils import db
 from face_processor import load_model, get_embedding
 from face_matcher import find_best_match
+from datetime import datetime
+import firebase_admin
+from firebase_admin import firestore
 
 # ------------------- APP UI -------------------
 st.set_page_config("Face Attendance V2", layout="wide")
@@ -85,14 +88,7 @@ if file and st.button("📸 Process Image"):
     st.info("👉 Upload another image below to improve detection. Attendance continues accumulating.")
 
 
-# ------------------ UPLOAD NEXT IMAGE ------------------
-st.subheader("Upload Another Angle")
 
-next_img = st.file_uploader("Upload next image", type=["jpg","png"], key="img2")
-
-if next_img and st.button("➡ Process Next Image"):
-    st.session_state.img1 = next_img
-    st.rerun()
 
 
 # ------------------ DISPLAY ATTENDANCE ------------------
@@ -119,14 +115,33 @@ if st.session_state.unknown_list:
         with cols[i % 5]:
             st.image(face_img)
         i += 1
-
-
 # ------------------ Finalize Attendance ------------------
-if st.button("Finalize Attendance"):
-    st.success("Attendance finalization backend coming next... 📝 (Save to Firebase)")
+if st.button("Finalize Attendance ✔"):
+    present = list(st.session_state.present)
+    absent = [usn for usn in students if usn not in present]
+    unknown_count = len(st.session_state.unknown_list)
 
+    today = datetime.now().strftime("%Y-%m-%d")   # attendance date
+    timestamp = datetime.now()
+
+    attendance_ref = db.collection("classes").document(class_id)\
+                        .collection("attendance").document(today)
+
+    attendance_ref.set({
+        "present": present,
+        "absent": absent,
+        "unknown_count": unknown_count,
+        "timestamp": timestamp
+    })
     st.write("✔ Present Students:", present)
     st.write("❌ Absent Students:", absent)
     st.write("🟡 Unknown count:", len(st.session_state.unknown_list))
+    st.success(f"Attendance saved for **{class_id} on {today}**")
+    st.balloons()
 
-    # Here we will save to database --> next task
+    # Reset for next session
+    st.session_state.present = set()
+    st.session_state.unknown_list = []
+
+
+
