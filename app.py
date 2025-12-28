@@ -3,14 +3,14 @@ import numpy as np
 from PIL import Image
 import cv2
 from firebase_utils import db
-from face_processor import load_model, get_embedding
-from face_matcher import find_best_match   # using wrapper
+from face_processor import load_model
+from face_matcher import find_best_match      # using wrapper
 
-# ------------------------------------
-# Streamlit Config
-# ------------------------------------
+
+# ------------------- Streamlit UI -------------------
 st.set_page_config("Face Attendance V2", layout="wide")
-st.title("🧑‍🏫 Face Attendance V2 - (Multi Image Ready)")
+st.title("🧑‍🏫 Face Attendance V2 - Multi Image Attendance")
+
 
 @st.cache_resource
 def load_face_model():
@@ -19,9 +19,7 @@ def load_face_model():
 model = load_face_model()
 
 
-# ------------------------------------
-# 1. CLASS SELECTION
-# ------------------------------------
+# ------------------- 1. CLASS SELECTION -------------------
 st.subheader("1. Select Class")
 
 dept = st.selectbox("Department", ["CSE","ISE","AI/ML","CS-ML","CS-DS","AI/DS","MBA","MCA"])
@@ -37,31 +35,23 @@ docs = db.collection("classes").document(class_id).collection("students").stream
 students = {s.id: s.to_dict() for s in docs}
 
 if not students:
-    st.error("⚠ No student list found. Upload via Admin Dashboard.")
+    st.error("⚠ No student list found. Upload via Admin Dashboard first.")
     st.stop()
 
 st.success(f"Loaded {len(students)} students for **{class_id}**")
 
 
-# ------------------------------------
-# SESSION STATE for Multi-Image Attendance
-# ------------------------------------
-if "present" not in st.session_state: 
-    st.session_state.present = set()
-
-if "unknown_list" not in st.session_state: 
-    st.session_state.unknown_list = []
+# ------------------- INIT SESSION -------------------
+if "present" not in st.session_state: st.session_state.present = set()
+if "unknown_faces" not in st.session_state: st.session_state.unknown_faces = []
 
 
-# ------------------------------------
-# 2. IMAGE UPLOAD & PROCESS
-# ------------------------------------
+# ------------------- 2. UPLOAD IMAGE -------------------
 st.subheader("2. Upload Classroom Photo")
-file = st.file_uploader("Upload image", type=["jpg","png"])
+image_file = st.file_uploader("Upload classroom image", type=["jpg","png"])
 
-
-if file and st.button("Process Image"):
-    img = Image.open(file).convert("RGB")
+if image_file and st.button("Process Image"):
+    img = Image.open(image_file).convert("RGB")
     img_np = np.array(img)
 
     faces = model.get(img_np)
@@ -70,26 +60,36 @@ if file and st.button("Process Image"):
         st.error("❌ No faces detected.")
         st.stop()
 
-    for face in faces:
-        emb = face.embedding
-        usn, score = find_best_match(emb, {u: s.get("embedding") for u,s in students.items()})
+    # PREPARE REGISTERED EMBEDDINGS
+    registered_embeddings = {u: s.get("embedding") for u,s in students.items() if "embedding" in s}
 
+    for face in faces:
+        emb = face.embedding                       # embedding from image
         x1, y1, x2, y2 = face.bbox.astype(int)
 
-        # ----------------- If student recognized -----------------
-        if usn:   # match found
-            name = students[usn]["name"]
+        # ---------- Debug: Check embedding size ----------
+        st.write("Detected embedding length =", len(emb))
+        if len(registered_embeddings) > 0:
+            sample_user = next(iter(registered_embeddings.values()))
+            if sample_user:
+                st.write("Stored embedding length =", len(sample_user))
+        # --------------------------------------------------
+
+        usn, score = find_best_match(emb, registered_embeddings)
+
+        # ================= MATCH FOUND ==================
+        if usn:
+            name = students[usn]['name']
+            st.session_state.present.add(usn)
 
             cv2.rectangle(img_np,(x1,y1),(x2,y2),(0,255,0),2)
             cv2.putText(img_np,f"{name} ({usn})",(x1,y1-10),
                         cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
 
-            st.session_state.present.add(usn)
-
+        # ================= UNKNOWN ==================
         else:
-            # ----------------- Unknown Face -----------------
-            crop = img_np[y1:y2, x1:x2]
-            st.session_state.unknown_list.append(crop)
+            face_crop = img_np[y1:y2, x1:x2]
+            st.session_state.unknown_faces.append(face_crop)
 
             cv2.rectangle(img_np,(x1,y1),(x2,y2),(0,0,255),2)
             cv2.putText(img_np,"Unknown",(x1,y1-10),
@@ -97,10 +97,11 @@ if file and st.button("Process Image"):
 
     st.image(img_np, use_column_width=True)
 
+    # Calculate absent
     absent = [usn for usn in students if usn not in st.session_state.present]
 
 
-    # -------- Results Display --------
+    # =================== DISPLAY RESULTS ===================
     st.subheader("🟢 Present Students")
     for usn in st.session_state.present:
         st.write(f"✔ {students[usn]['name']} ({usn})")
@@ -110,20 +111,15 @@ if file and st.button("Process Image"):
 
     st.subheader("🟡 Unknown Faces")
     cols = st.columns(4)
-    for i, face in enumerate(st.session_state.unknown_list):
-        with cols[i%4]:
+    for i, face in enumerate(st.session_state.unknown_faces):
+        with cols[i % 4]:
             st.image(face)
 
-    st.info("📌 Upload more images if needed. Attendance accumulates automatically.")
-    
+    st.info("📌 Upload more images if needed — attendance will merge automatically.")
 
-# ------------------------------------
-# Finalize Attendance (Step-3 Next)
-# ------------------------------------
+
+# ------------------- 3. FINALIZE ATTENDANCE -------------------
 if st.button("Finalize Attendance"):
-    st.success("Attendance Finalization page loading next 🚀")
+    st.success("Finalization page coming next 🚀")
     st.write("Present:", list(st.session_state.present))
-    st.write("Unknown faces:", len(st.session_state.unknown_list))
-st.write("Detected emb shape:", len(emb))
-st.write("Stored emb shape:", len(list(students.values())[0].get("embedding", [])))
-
+    st.write("Unknown:", len(st.session_state.unknown_faces))
