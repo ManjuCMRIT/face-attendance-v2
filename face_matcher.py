@@ -6,7 +6,7 @@ def normalize(v):
     v = np.array(v, dtype=float)
     return v / (np.linalg.norm(v) + 1e-10)
 
-def find_best_match(face_embedding, students, threshold=0.55):
+def find_best_match(face_embedding, students, threshold=0.5):
     """
     face_embedding: numpy array (512,)
     students: dict {USN: {name, embedding}}
