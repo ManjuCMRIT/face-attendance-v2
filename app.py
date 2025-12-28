@@ -115,7 +115,7 @@ if file and st.button("Process Image"):
             st.image(face)
 
     st.info("📌 Upload more images if needed. Attendance accumulates automatically.")
-
+    
 
 # ------------------------------------
 # Finalize Attendance (Step-3 Next)
@@ -124,3 +124,6 @@ if st.button("Finalize Attendance"):
     st.success("Attendance Finalization page loading next 🚀")
     st.write("Present:", list(st.session_state.present))
     st.write("Unknown faces:", len(st.session_state.unknown_list))
+st.write("Detected emb shape:", len(emb))
+st.write("Stored emb shape:", len(list(students.values())[0].get("embedding", [])))
+
