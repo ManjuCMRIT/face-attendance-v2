@@ -1,8 +1,10 @@
-streamlit
-firebase-admin
-numpy
-opencv-python-headless
-Pillow
+streamlit==1.32.2
+numpy==1.26.4
+Pillow==10.2.0
+opencv-python-headless==4.9.0.80
+onnxruntime==1.16.3
 insightface==0.7.3
-onnxruntime
+firebase-admin==6.4.0
+scikit-learn==1.4.1.post1
 protobuf==3.20.*
+
