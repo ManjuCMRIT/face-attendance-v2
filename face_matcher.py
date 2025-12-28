@@ -51,7 +51,10 @@ def match_faces(emb, registered, threshold=0.55):
 
     return best_match, best_score
 
-# backwards compatibility wrapper
+# ----------------------------------------
+# Backward compatibility for old code
+# ----------------------------------------
 def find_best_match(embedding, registered_users, threshold=0.55):
+    """Wrapper for older apps that used find_best_match"""
     return match_faces(embedding, registered_users, threshold)
 
