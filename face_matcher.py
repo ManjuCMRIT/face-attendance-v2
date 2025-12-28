@@ -1,65 +1,37 @@
 import numpy as np
-import cv2
-import insightface
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Load recognition model once
-_model = None
-_face_app = None
+def normalize(v):
+    """Normalize vectors for better similarity score stability."""
+    v = np.array(v, dtype=float)
+    return v / (np.linalg.norm(v) + 1e-10)
 
-def load_model():
-    global _model, _face_app
-    if _model is None:
-        _face_app = insightface.app.FaceAnalysis(name="buffalo_l")
-        _face_app.prepare(ctx_id=0)
-    return _face_app
+def find_best_match(face_embedding, students, threshold=0.55):
+    """
+    face_embedding: numpy array (512,)
+    students: dict {USN: {name, embedding}}
+    Returns: usn, score
+    """
 
+    face_embedding = normalize(face_embedding).reshape(1, -1)
 
-# Extract embeddings for multiple faces in classroom photo
-def get_embeddings(img_np):
-    app = load_model()
-    faces = app.get(img_np)
+    best_usn = "Unknown"
+    best_score = -1
 
-    result = []
-    for f in faces:
-        emb = f.embedding.tolist()
-        bbox = list(map(int, f.bbox))  # (x1,y1,x2,y2)
-        result.append((emb, bbox))
+    for usn, data in students.items():
 
-    return result
+        if "embedding" not in data:
+            continue  # skip students without face registered
 
+        emb = normalize(data["embedding"]).reshape(1, -1)
+        score = cosine_similarity(face_embedding, emb)[0][0]
 
-def match_faces(emb, registered, threshold=0.55):
-    emb = np.array(emb, dtype=float)  # convert uploaded embedding to numpy
-    
-    best_match = None
-    best_score = 999  # large initial value
+        if score > best_score:
+            best_score = score
+            best_usn = usn
 
-    for usn, reg_emb in registered.items():
+    # threshold tuning
+    if best_score >= threshold:
+        return best_usn, float(best_score)
 
-        # Skip if embedding doesn't exist or is empty
-        if reg_emb is None or len(reg_emb) == 0:
-            continue
-
-        try:
-            reg_emb = np.array(reg_emb, dtype=float)
-        except:
-            continue  # ignore invalid records
-
-        dist = np.linalg.norm(reg_emb - emb)
-
-        # accept only best & below threshold
-        if dist < best_score and dist < threshold:
-            best_score = dist
-            best_match = usn
-
-    return best_match, best_score
-
-
-
-# ----------------------------------------
-# Backward compatibility for old code
-# ----------------------------------------
-def find_best_match(embedding, registered_users, threshold=0.55):
-    """Wrapper for older apps that used find_best_match"""
-    return match_faces(embedding, registered_users, threshold)
-
+    return "Unknown", float(best_score)
