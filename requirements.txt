@@ -1,0 +1,8 @@
+streamlit
+firebase-admin
+numpy
+opencv-python-headless
+Pillow
+insightface==0.7.3
+onnxruntime
+protobuf==3.20.*
