@@ -67,7 +67,7 @@ st.divider()
 
 
 # ==================================================
-# SESSION STATE
+# SESSION STATE (SAFE INIT + CLEANUP)
 # ==================================================
 if "present" not in st.session_state:
     st.session_state.present = set()
@@ -77,6 +77,12 @@ if "manual_present" not in st.session_state:
 
 if "unknown_faces" not in st.session_state:
     st.session_state.unknown_faces = []
+
+# 🧹 CLEAN OLD / INVALID CROPS (IMPORTANT AFTER PAGES)
+st.session_state.unknown_faces = [
+    f for f in st.session_state.unknown_faces
+    if isinstance(f, np.ndarray) and f.size > 0
+]
 
 if "images_processed" not in st.session_state:
     st.session_state.images_processed = 0
@@ -120,9 +126,12 @@ if file and st.button("📸 Process Image"):
             else:
                 label = "Unknown"
                 color = (200, 0, 0)
-                st.session_state.unknown_faces.append(
-                    img_np[y1:y2, x1:x2]
-                )
+
+                # ✅ SAFE FACE CROP
+                crop = img_np[y1:y2, x1:x2]
+                if crop is not None and crop.size > 0:
+                    crop = np.clip(crop, 0, 255).astype(np.uint8)
+                    st.session_state.unknown_faces.append(crop)
 
             cv2.rectangle(img_np, (x1, y1), (x2, y2), color, 2)
             cv2.putText(
@@ -178,7 +187,7 @@ for usn in absent:
 
 
 # ==================================================
-# UNKNOWN FACES
+# UNKNOWN FACES (SAFE DISPLAY)
 # ==================================================
 if st.session_state.unknown_faces:
     st.subheader("🟡 Unrecognized Faces")
@@ -186,8 +195,9 @@ if st.session_state.unknown_faces:
 
     cols = st.columns(5)
     for i, face_img in enumerate(st.session_state.unknown_faces):
-        with cols[i % 5]:
-            st.image(face_img)
+        if face_img is not None and face_img.size > 0:
+            with cols[i % 5]:
+                st.image(face_img)
 
 
 st.divider()
